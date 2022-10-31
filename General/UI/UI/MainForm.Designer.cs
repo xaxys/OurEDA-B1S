@@ -29,8 +29,7 @@ namespace UI
         /// </summary>
         private void InitializeComponent()
         {
-            this.panel1 = new System.Windows.Forms.Panel();
-            this.webBrowser1 = new System.Windows.Forms.WebBrowser();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.serialStatLabel = new System.Windows.Forms.Label();
             this.networkStatLabel = new System.Windows.Forms.Label();
             this.panel2 = new System.Windows.Forms.Panel();
@@ -74,19 +73,20 @@ namespace UI
             this.keepDepthLabel = new System.Windows.Forms.Label();
             this.keepYawLabel = new System.Windows.Forms.Label();
             this.mainCamButton = new System.Windows.Forms.Button();
-            this.DualCamButton = new System.Windows.Forms.Button();
+            this.dualCamButton = new System.Windows.Forms.Button();
             this.mainDetectButton = new System.Windows.Forms.Button();
             this.dualDetectButton = new System.Windows.Forms.Button();
             this.mainEnhanceButton = new System.Windows.Forms.Button();
             this.viceCamButton = new System.Windows.Forms.Button();
             this.panel16 = new System.Windows.Forms.Panel();
-            this.haltButton = new System.Windows.Forms.Button();
+            this.halfAutoLabel = new System.Windows.Forms.Label();
+            this.halfAutoModeButton = new System.Windows.Forms.Button();
             this.ucSignalLamp2 = new HZH_Controls.Controls.UCSignalLamp();
             this.modeAutoButton = new System.Windows.Forms.Button();
             this.ucSignalLamp1 = new HZH_Controls.Controls.UCSignalLamp();
             this.autoLabel = new System.Windows.Forms.Label();
             this.panel17 = new System.Windows.Forms.Panel();
-            this.pictureBox1 = new System.Windows.Forms.PictureBox();
+            this.shoppingCartPic = new System.Windows.Forms.PictureBox();
             this.leftArrow = new HZH_Controls.Controls.UCArrow();
             this.rightArrow1 = new HZH_Controls.Controls.UCArrow();
             this.ucConveyor1 = new HZH_Controls.Controls.UCConveyor();
@@ -99,17 +99,17 @@ namespace UI
             this.angleLabel = new System.Windows.Forms.Label();
             this.modeSidePushLabel = new System.Windows.Forms.Label();
             this.panel18 = new System.Windows.Forms.Panel();
-            this.listBox1 = new System.Windows.Forms.ListBox();
+            this.infoListBox = new System.Windows.Forms.ListBox();
             this.panel19 = new System.Windows.Forms.Panel();
             this.networkPanel = new System.Windows.Forms.Panel();
             this.panel12 = new System.Windows.Forms.Panel();
+            this.compointCt = new FlyMeter.CompointCt();
             this.horiCt = new FlyMeter.HoriCt();
-            this.pictureBox6 = new System.Windows.Forms.PictureBox();
-            this.pictureBox5 = new System.Windows.Forms.PictureBox();
-            this.pictureBox4 = new System.Windows.Forms.PictureBox();
-            this.pictureBox3 = new System.Windows.Forms.PictureBox();
             this.serialPanel = new System.Windows.Forms.Panel();
-            this.panel1.SuspendLayout();
+            this.mainPanel = new System.Windows.Forms.Panel();
+            this.mainPanelMask = new System.Windows.Forms.PictureBox();
+            this.webBrowser = new System.Windows.Forms.WebBrowser();
+            this.chromiumWebBrowser = new CefSharp.WinForms.ChromiumWebBrowser();
             this.panel2.SuspendLayout();
             this.panel3.SuspendLayout();
             this.panel4.SuspendLayout();
@@ -123,36 +123,13 @@ namespace UI
             this.panel15.SuspendLayout();
             this.panel16.SuspendLayout();
             this.panel17.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.shoppingCartPic)).BeginInit();
             this.panel18.SuspendLayout();
             this.panel19.SuspendLayout();
             this.panel12.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox6)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox5)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox4)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox3)).BeginInit();
+            this.mainPanel.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.mainPanelMask)).BeginInit();
             this.SuspendLayout();
-            // 
-            // panel1
-            // 
-            this.panel1.BackColor = System.Drawing.SystemColors.ActiveCaptionText;
-            this.panel1.Controls.Add(this.webBrowser1);
-            this.panel1.Location = new System.Drawing.Point(145, 4);
-            this.panel1.Margin = new System.Windows.Forms.Padding(2);
-            this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(926, 570);
-            this.panel1.TabIndex = 0;
-            // 
-            // webBrowser1
-            // 
-            this.webBrowser1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.webBrowser1.Location = new System.Drawing.Point(0, 0);
-            this.webBrowser1.Margin = new System.Windows.Forms.Padding(2);
-            this.webBrowser1.MinimumSize = new System.Drawing.Size(15, 16);
-            this.webBrowser1.Name = "webBrowser1";
-            this.webBrowser1.Size = new System.Drawing.Size(926, 570);
-            this.webBrowser1.TabIndex = 0;
-            this.webBrowser1.Visible = false;
             // 
             // serialStatLabel
             // 
@@ -165,7 +142,7 @@ namespace UI
             this.serialStatLabel.TabIndex = 1;
             this.serialStatLabel.Text = "串口连接";
             this.serialStatLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.serialStatLabel.Click += new System.EventHandler(this.serialPanel_Click);
+            this.serialStatLabel.Click += new System.EventHandler(this.serialStatClick);
             // 
             // networkStatLabel
             // 
@@ -178,7 +155,7 @@ namespace UI
             this.networkStatLabel.TabIndex = 2;
             this.networkStatLabel.Text = "网口连接";
             this.networkStatLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.networkStatLabel.Click += new System.EventHandler(this.networkPanel_Click);
+            this.networkStatLabel.Click += new System.EventHandler(this.networkStatClick);
             // 
             // panel2
             // 
@@ -335,7 +312,7 @@ namespace UI
             this.powerCabHumidLabel.AutoSize = true;
             this.powerCabHumidLabel.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.powerCabHumidLabel.ForeColor = System.Drawing.Color.Lime;
-            this.powerCabHumidLabel.Location = new System.Drawing.Point(17, 54);
+            this.powerCabHumidLabel.Location = new System.Drawing.Point(17, 51);
             this.powerCabHumidLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.powerCabHumidLabel.Name = "powerCabHumidLabel";
             this.powerCabHumidLabel.Size = new System.Drawing.Size(75, 15);
@@ -349,7 +326,7 @@ namespace UI
             this.powerCabTempLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.powerCabTempLabel.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.powerCabTempLabel.ForeColor = System.Drawing.Color.Lime;
-            this.powerCabTempLabel.Location = new System.Drawing.Point(16, 26);
+            this.powerCabTempLabel.Location = new System.Drawing.Point(17, 26);
             this.powerCabTempLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.powerCabTempLabel.Name = "powerCabTempLabel";
             this.powerCabTempLabel.Size = new System.Drawing.Size(82, 15);
@@ -574,7 +551,7 @@ namespace UI
             this.panel10.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.panel10.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panel10.Controls.Add(this.rollLabel);
-            this.panel10.Location = new System.Drawing.Point(1073, 138);
+            this.panel10.Location = new System.Drawing.Point(1073, 153);
             this.panel10.Margin = new System.Windows.Forms.Padding(2);
             this.panel10.Name = "panel10";
             this.panel10.Size = new System.Drawing.Size(142, 40);
@@ -600,7 +577,7 @@ namespace UI
             this.panel11.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.panel11.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panel11.Controls.Add(this.pitchLabel);
-            this.panel11.Location = new System.Drawing.Point(1215, 138);
+            this.panel11.Location = new System.Drawing.Point(1215, 153);
             this.panel11.Margin = new System.Windows.Forms.Padding(2);
             this.panel11.Name = "panel11";
             this.panel11.Size = new System.Drawing.Size(142, 40);
@@ -626,7 +603,7 @@ namespace UI
             this.panel13.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panel13.Controls.Add(this.yawLabel);
             this.panel13.ForeColor = System.Drawing.Color.Lime;
-            this.panel13.Location = new System.Drawing.Point(1073, 340);
+            this.panel13.Location = new System.Drawing.Point(1073, 341);
             this.panel13.Margin = new System.Windows.Forms.Padding(2);
             this.panel13.Name = "panel13";
             this.panel13.Size = new System.Drawing.Size(284, 31);
@@ -653,10 +630,10 @@ namespace UI
             this.panel14.Controls.Add(this.depthLabel);
             this.panel14.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.panel14.ForeColor = System.Drawing.Color.Lime;
-            this.panel14.Location = new System.Drawing.Point(1072, 372);
+            this.panel14.Location = new System.Drawing.Point(1073, 372);
             this.panel14.Margin = new System.Windows.Forms.Padding(2);
             this.panel14.Name = "panel14";
-            this.panel14.Size = new System.Drawing.Size(142, 40);
+            this.panel14.Size = new System.Drawing.Size(141, 40);
             this.panel14.TabIndex = 16;
             this.panel14.Paint += new System.Windows.Forms.PaintEventHandler(this.panel14_Paint);
             // 
@@ -707,10 +684,10 @@ namespace UI
             this.keepDepthLabel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.keepDepthLabel.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.keepDepthLabel.ForeColor = System.Drawing.Color.Lime;
-            this.keepDepthLabel.Location = new System.Drawing.Point(1072, 413);
+            this.keepDepthLabel.Location = new System.Drawing.Point(1073, 413);
             this.keepDepthLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.keepDepthLabel.Name = "keepDepthLabel";
-            this.keepDepthLabel.Size = new System.Drawing.Size(142, 40);
+            this.keepDepthLabel.Size = new System.Drawing.Size(141, 40);
             this.keepDepthLabel.TabIndex = 18;
             this.keepDepthLabel.Text = "深度保持";
             this.keepDepthLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -739,31 +716,31 @@ namespace UI
             this.mainCamButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.mainCamButton.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.mainCamButton.ForeColor = System.Drawing.Color.Lime;
-            this.mainCamButton.Location = new System.Drawing.Point(1073, 454);
+            this.mainCamButton.Location = new System.Drawing.Point(1073, 455);
             this.mainCamButton.Margin = new System.Windows.Forms.Padding(2);
             this.mainCamButton.Name = "mainCamButton";
-            this.mainCamButton.Size = new System.Drawing.Size(142, 40);
+            this.mainCamButton.Size = new System.Drawing.Size(141, 38);
             this.mainCamButton.TabIndex = 20;
             this.mainCamButton.Text = "主摄像头画面";
             this.mainCamButton.UseVisualStyleBackColor = false;
             this.mainCamButton.Click += new System.EventHandler(this.mainCamButtonClick);
             // 
-            // DualCamButton
+            // dualCamButton
             // 
-            this.DualCamButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
-            this.DualCamButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
-            this.DualCamButton.FlatAppearance.BorderSize = 2;
-            this.DualCamButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.DualCamButton.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.DualCamButton.ForeColor = System.Drawing.Color.Lime;
-            this.DualCamButton.Location = new System.Drawing.Point(1215, 454);
-            this.DualCamButton.Margin = new System.Windows.Forms.Padding(2);
-            this.DualCamButton.Name = "DualCamButton";
-            this.DualCamButton.Size = new System.Drawing.Size(142, 40);
-            this.DualCamButton.TabIndex = 21;
-            this.DualCamButton.Text = "双目摄像画面";
-            this.DualCamButton.UseVisualStyleBackColor = false;
-            this.DualCamButton.Click += new System.EventHandler(this.DualCamButtonClick);
+            this.dualCamButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
+            this.dualCamButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.dualCamButton.FlatAppearance.BorderSize = 2;
+            this.dualCamButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.dualCamButton.Font = new System.Drawing.Font("宋体", 10.8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.dualCamButton.ForeColor = System.Drawing.Color.Lime;
+            this.dualCamButton.Location = new System.Drawing.Point(1215, 455);
+            this.dualCamButton.Margin = new System.Windows.Forms.Padding(2);
+            this.dualCamButton.Name = "dualCamButton";
+            this.dualCamButton.Size = new System.Drawing.Size(142, 38);
+            this.dualCamButton.TabIndex = 21;
+            this.dualCamButton.Text = "双目摄像画面";
+            this.dualCamButton.UseVisualStyleBackColor = false;
+            this.dualCamButton.Click += new System.EventHandler(this.DualCamButtonClick);
             // 
             // mainDetectButton
             // 
@@ -776,7 +753,7 @@ namespace UI
             this.mainDetectButton.Location = new System.Drawing.Point(1073, 494);
             this.mainDetectButton.Margin = new System.Windows.Forms.Padding(2);
             this.mainDetectButton.Name = "mainDetectButton";
-            this.mainDetectButton.Size = new System.Drawing.Size(142, 40);
+            this.mainDetectButton.Size = new System.Drawing.Size(141, 38);
             this.mainDetectButton.TabIndex = 22;
             this.mainDetectButton.Text = "单目检测画面";
             this.mainDetectButton.UseVisualStyleBackColor = false;
@@ -793,7 +770,7 @@ namespace UI
             this.dualDetectButton.Location = new System.Drawing.Point(1215, 494);
             this.dualDetectButton.Margin = new System.Windows.Forms.Padding(2);
             this.dualDetectButton.Name = "dualDetectButton";
-            this.dualDetectButton.Size = new System.Drawing.Size(142, 40);
+            this.dualDetectButton.Size = new System.Drawing.Size(142, 38);
             this.dualDetectButton.TabIndex = 23;
             this.dualDetectButton.Text = "双目检测画面";
             this.dualDetectButton.UseVisualStyleBackColor = false;
@@ -810,7 +787,7 @@ namespace UI
             this.mainEnhanceButton.Location = new System.Drawing.Point(1073, 534);
             this.mainEnhanceButton.Margin = new System.Windows.Forms.Padding(2);
             this.mainEnhanceButton.Name = "mainEnhanceButton";
-            this.mainEnhanceButton.Size = new System.Drawing.Size(142, 40);
+            this.mainEnhanceButton.Size = new System.Drawing.Size(141, 38);
             this.mainEnhanceButton.TabIndex = 24;
             this.mainEnhanceButton.Text = "单目增强模式";
             this.mainEnhanceButton.UseVisualStyleBackColor = false;
@@ -827,7 +804,7 @@ namespace UI
             this.viceCamButton.Location = new System.Drawing.Point(1215, 534);
             this.viceCamButton.Margin = new System.Windows.Forms.Padding(2);
             this.viceCamButton.Name = "viceCamButton";
-            this.viceCamButton.Size = new System.Drawing.Size(142, 40);
+            this.viceCamButton.Size = new System.Drawing.Size(142, 38);
             this.viceCamButton.TabIndex = 25;
             this.viceCamButton.Text = "辅摄像头画面";
             this.viceCamButton.UseVisualStyleBackColor = false;
@@ -836,7 +813,8 @@ namespace UI
             // panel16
             // 
             this.panel16.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.panel16.Controls.Add(this.haltButton);
+            this.panel16.Controls.Add(this.halfAutoLabel);
+            this.panel16.Controls.Add(this.halfAutoModeButton);
             this.panel16.Controls.Add(this.ucSignalLamp2);
             this.panel16.Controls.Add(this.modeAutoButton);
             this.panel16.Controls.Add(this.ucSignalLamp1);
@@ -857,21 +835,36 @@ namespace UI
             this.panel16.TabIndex = 17;
             this.panel16.Paint += new System.Windows.Forms.PaintEventHandler(this.panel16_Paint);
             // 
-            // haltButton
+            // halfAutoLabel
             // 
-            this.haltButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
-            this.haltButton.FlatAppearance.BorderSize = 2;
-            this.haltButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.haltButton.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.haltButton.ForeColor = System.Drawing.Color.Lime;
-            this.haltButton.Location = new System.Drawing.Point(784, 61);
-            this.haltButton.Margin = new System.Windows.Forms.Padding(2);
-            this.haltButton.Name = "haltButton";
-            this.haltButton.Size = new System.Drawing.Size(139, 58);
-            this.haltButton.TabIndex = 43;
-            this.haltButton.Text = "计算模块关机";
-            this.haltButton.UseVisualStyleBackColor = false;
-            this.haltButton.Click += new System.EventHandler(this.haltButton_Click);
+            this.halfAutoLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
+            this.halfAutoLabel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.halfAutoLabel.Font = new System.Drawing.Font("宋体", 16.2F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.halfAutoLabel.ForeColor = System.Drawing.Color.Lime;
+            this.halfAutoLabel.Location = new System.Drawing.Point(737, 32);
+            this.halfAutoLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            this.halfAutoLabel.Name = "halfAutoLabel";
+            this.halfAutoLabel.Size = new System.Drawing.Size(92, 28);
+            this.halfAutoLabel.TabIndex = 44;
+            this.halfAutoLabel.Text = "半自动";
+            this.halfAutoLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.halfAutoLabel.Paint += new System.Windows.Forms.PaintEventHandler(this.halfAutoLabel_Paint);
+            // 
+            // halfAutoModeButton
+            // 
+            this.halfAutoModeButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.halfAutoModeButton.FlatAppearance.BorderSize = 2;
+            this.halfAutoModeButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.halfAutoModeButton.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.halfAutoModeButton.ForeColor = System.Drawing.Color.Lime;
+            this.halfAutoModeButton.Location = new System.Drawing.Point(784, 61);
+            this.halfAutoModeButton.Margin = new System.Windows.Forms.Padding(2);
+            this.halfAutoModeButton.Name = "halfAutoModeButton";
+            this.halfAutoModeButton.Size = new System.Drawing.Size(139, 58);
+            this.halfAutoModeButton.TabIndex = 43;
+            this.halfAutoModeButton.Text = "半自主运行模式";
+            this.halfAutoModeButton.UseVisualStyleBackColor = false;
+            this.halfAutoModeButton.Click += new System.EventHandler(this.halfAutoModeButtonClick);
             // 
             // ucSignalLamp2
             // 
@@ -921,10 +914,10 @@ namespace UI
             this.autoLabel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.autoLabel.Font = new System.Drawing.Font("宋体", 16.2F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.autoLabel.ForeColor = System.Drawing.Color.Lime;
-            this.autoLabel.Location = new System.Drawing.Point(784, 32);
+            this.autoLabel.Location = new System.Drawing.Point(830, 32);
             this.autoLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.autoLabel.Name = "autoLabel";
-            this.autoLabel.Size = new System.Drawing.Size(139, 28);
+            this.autoLabel.Size = new System.Drawing.Size(92, 28);
             this.autoLabel.TabIndex = 35;
             this.autoLabel.Text = "自动";
             this.autoLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -934,7 +927,7 @@ namespace UI
             // 
             this.panel17.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.panel17.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.panel17.Controls.Add(this.pictureBox1);
+            this.panel17.Controls.Add(this.shoppingCartPic);
             this.panel17.Controls.Add(this.leftArrow);
             this.panel17.Controls.Add(this.rightArrow1);
             this.panel17.Controls.Add(this.ucConveyor1);
@@ -945,18 +938,18 @@ namespace UI
             this.panel17.TabIndex = 17;
             this.panel17.Paint += new System.Windows.Forms.PaintEventHandler(this.panel17_Paint);
             // 
-            // pictureBox1
+            // shoppingCartPic
             // 
-            this.pictureBox1.BackColor = System.Drawing.Color.White;
-            this.pictureBox1.BackgroundImage = global::UI.Properties.Resources.shoppingCart;
-            this.pictureBox1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
-            this.pictureBox1.InitialImage = null;
-            this.pictureBox1.Location = new System.Drawing.Point(184, 2);
-            this.pictureBox1.Margin = new System.Windows.Forms.Padding(2);
-            this.pictureBox1.Name = "pictureBox1";
-            this.pictureBox1.Size = new System.Drawing.Size(28, 22);
-            this.pictureBox1.TabIndex = 38;
-            this.pictureBox1.TabStop = false;
+            this.shoppingCartPic.BackColor = System.Drawing.Color.White;
+            this.shoppingCartPic.BackgroundImage = global::UI.Properties.Resources.shoppingCart;
+            this.shoppingCartPic.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
+            this.shoppingCartPic.InitialImage = null;
+            this.shoppingCartPic.Location = new System.Drawing.Point(184, 2);
+            this.shoppingCartPic.Margin = new System.Windows.Forms.Padding(2);
+            this.shoppingCartPic.Name = "shoppingCartPic";
+            this.shoppingCartPic.Size = new System.Drawing.Size(28, 22);
+            this.shoppingCartPic.TabIndex = 38;
+            this.shoppingCartPic.TabStop = false;
             // 
             // leftArrow
             // 
@@ -1003,10 +996,10 @@ namespace UI
             this.manualLabel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.manualLabel.Font = new System.Drawing.Font("宋体", 16.2F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.manualLabel.ForeColor = System.Drawing.Color.Lime;
-            this.manualLabel.Location = new System.Drawing.Point(643, 32);
+            this.manualLabel.Location = new System.Drawing.Point(644, 32);
             this.manualLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
             this.manualLabel.Name = "manualLabel";
-            this.manualLabel.Size = new System.Drawing.Size(140, 28);
+            this.manualLabel.Size = new System.Drawing.Size(92, 28);
             this.manualLabel.TabIndex = 34;
             this.manualLabel.Text = "手动";
             this.manualLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -1031,7 +1024,7 @@ namespace UI
             // 
             this.driverLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.driverLabel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.driverLabel.Font = new System.Drawing.Font("宋体", 15F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.driverLabel.Font = new System.Drawing.Font("宋体", 16.2F, System.Drawing.FontStyle.Bold);
             this.driverLabel.ForeColor = System.Drawing.Color.Lime;
             this.driverLabel.Location = new System.Drawing.Point(280, 62);
             this.driverLabel.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
@@ -1122,7 +1115,7 @@ namespace UI
             // 
             this.panel18.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.panel18.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.panel18.Controls.Add(this.listBox1);
+            this.panel18.Controls.Add(this.infoListBox);
             this.panel18.Location = new System.Drawing.Point(1073, 574);
             this.panel18.Margin = new System.Windows.Forms.Padding(2);
             this.panel18.Name = "panel18";
@@ -1130,19 +1123,19 @@ namespace UI
             this.panel18.TabIndex = 17;
             this.panel18.Paint += new System.Windows.Forms.PaintEventHandler(this.panel18_Paint);
             // 
-            // listBox1
+            // infoListBox
             // 
-            this.listBox1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
-            this.listBox1.BorderStyle = System.Windows.Forms.BorderStyle.None;
-            this.listBox1.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.listBox1.ForeColor = System.Drawing.Color.Lime;
-            this.listBox1.FormattingEnabled = true;
-            this.listBox1.ItemHeight = 16;
-            this.listBox1.Location = new System.Drawing.Point(3, 4);
-            this.listBox1.Margin = new System.Windows.Forms.Padding(5);
-            this.listBox1.Name = "listBox1";
-            this.listBox1.Size = new System.Drawing.Size(277, 112);
-            this.listBox1.TabIndex = 0;
+            this.infoListBox.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
+            this.infoListBox.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.infoListBox.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.infoListBox.ForeColor = System.Drawing.Color.Lime;
+            this.infoListBox.FormattingEnabled = true;
+            this.infoListBox.ItemHeight = 16;
+            this.infoListBox.Location = new System.Drawing.Point(3, 4);
+            this.infoListBox.Margin = new System.Windows.Forms.Padding(5);
+            this.infoListBox.Name = "infoListBox";
+            this.infoListBox.Size = new System.Drawing.Size(277, 112);
+            this.infoListBox.TabIndex = 0;
             // 
             // panel19
             // 
@@ -1168,75 +1161,39 @@ namespace UI
             this.networkPanel.Location = new System.Drawing.Point(1215, 4);
             this.networkPanel.Margin = new System.Windows.Forms.Padding(2);
             this.networkPanel.Name = "networkPanel";
-            this.networkPanel.Size = new System.Drawing.Size(142, 134);
+            this.networkPanel.Size = new System.Drawing.Size(142, 148);
             this.networkPanel.TabIndex = 17;
+            this.networkPanel.Click += new System.EventHandler(this.recordCommandStop);
             // 
             // panel12
             // 
             this.panel12.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
             this.panel12.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panel12.Controls.Add(this.compointCt);
             this.panel12.Controls.Add(this.horiCt);
-            this.panel12.Controls.Add(this.pictureBox6);
-            this.panel12.Controls.Add(this.pictureBox5);
-            this.panel12.Controls.Add(this.pictureBox4);
-            this.panel12.Controls.Add(this.pictureBox3);
-            this.panel12.Location = new System.Drawing.Point(1073, 178);
+            this.panel12.Location = new System.Drawing.Point(1073, 194);
             this.panel12.Margin = new System.Windows.Forms.Padding(2);
             this.panel12.Name = "panel12";
-            this.panel12.Size = new System.Drawing.Size(284, 164);
+            this.panel12.Size = new System.Drawing.Size(284, 146);
             this.panel12.TabIndex = 16;
             this.panel12.Paint += new System.Windows.Forms.PaintEventHandler(this.panel12_Paint);
             // 
+            // compointCt
+            // 
+            this.compointCt.BackColor = System.Drawing.Color.Transparent;
+            this.compointCt.DirAngle = 0D;
+            this.compointCt.Location = new System.Drawing.Point(140, 0);
+            this.compointCt.Name = "compointCt";
+            this.compointCt.Size = new System.Drawing.Size(141, 141);
+            this.compointCt.TabIndex = 25;
+            // 
             // horiCt
             // 
-            this.horiCt.Location = new System.Drawing.Point(62, 1);
+            this.horiCt.BackColor = System.Drawing.Color.Transparent;
+            this.horiCt.Location = new System.Drawing.Point(1, 2);
             this.horiCt.Name = "horiCt";
-            this.horiCt.Size = new System.Drawing.Size(158, 158);
+            this.horiCt.Size = new System.Drawing.Size(139, 139);
             this.horiCt.TabIndex = 24;
-            // 
-            // pictureBox6
-            // 
-            this.pictureBox6.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.pictureBox6.Location = new System.Drawing.Point(233, 110);
-            this.pictureBox6.Margin = new System.Windows.Forms.Padding(2);
-            this.pictureBox6.Name = "pictureBox6";
-            this.pictureBox6.Size = new System.Drawing.Size(46, 50);
-            this.pictureBox6.TabIndex = 23;
-            this.pictureBox6.TabStop = false;
-            // 
-            // pictureBox5
-            // 
-            this.pictureBox5.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.pictureBox5.Location = new System.Drawing.Point(3, 110);
-            this.pictureBox5.Margin = new System.Windows.Forms.Padding(2);
-            this.pictureBox5.Name = "pictureBox5";
-            this.pictureBox5.Size = new System.Drawing.Size(46, 50);
-            this.pictureBox5.TabIndex = 22;
-            this.pictureBox5.TabStop = false;
-            // 
-            // pictureBox4
-            // 
-            this.pictureBox4.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(67)))), ((int)(((byte)(67)))), ((int)(((byte)(67)))));
-            this.pictureBox4.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.pictureBox4.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.pictureBox4.Location = new System.Drawing.Point(233, 5);
-            this.pictureBox4.Margin = new System.Windows.Forms.Padding(2);
-            this.pictureBox4.Name = "pictureBox4";
-            this.pictureBox4.Size = new System.Drawing.Size(46, 50);
-            this.pictureBox4.TabIndex = 21;
-            this.pictureBox4.TabStop = false;
-            this.pictureBox4.Click += new System.EventHandler(this.pictureBox4_Click);
-            // 
-            // pictureBox3
-            // 
-            this.pictureBox3.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
-            this.pictureBox3.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.pictureBox3.Location = new System.Drawing.Point(3, 5);
-            this.pictureBox3.Margin = new System.Windows.Forms.Padding(2);
-            this.pictureBox3.Name = "pictureBox3";
-            this.pictureBox3.Size = new System.Drawing.Size(46, 50);
-            this.pictureBox3.TabIndex = 20;
-            this.pictureBox3.TabStop = false;
             // 
             // serialPanel
             // 
@@ -1247,8 +1204,50 @@ namespace UI
             this.serialPanel.Location = new System.Drawing.Point(1073, 4);
             this.serialPanel.Margin = new System.Windows.Forms.Padding(2);
             this.serialPanel.Name = "serialPanel";
-            this.serialPanel.Size = new System.Drawing.Size(143, 134);
+            this.serialPanel.Size = new System.Drawing.Size(143, 148);
             this.serialPanel.TabIndex = 16;
+            this.serialPanel.Click += new System.EventHandler(this.recordCommand);
+            // 
+            // mainPanel
+            // 
+            this.mainPanel.BackColor = System.Drawing.SystemColors.ActiveCaptionText;
+            this.mainPanel.Controls.Add(this.mainPanelMask);
+            this.mainPanel.Controls.Add(this.webBrowser);
+            this.mainPanel.Controls.Add(this.chromiumWebBrowser);
+            this.mainPanel.Location = new System.Drawing.Point(145, 4);
+            this.mainPanel.Margin = new System.Windows.Forms.Padding(2);
+            this.mainPanel.Name = "mainPanel";
+            this.mainPanel.Size = new System.Drawing.Size(926, 570);
+            this.mainPanel.TabIndex = 0;
+            // 
+            // mainPanelMask
+            // 
+            this.mainPanelMask.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.mainPanelMask.Location = new System.Drawing.Point(0, 0);
+            this.mainPanelMask.Name = "mainPanelMask";
+            this.mainPanelMask.Size = new System.Drawing.Size(926, 570);
+            this.mainPanelMask.TabIndex = 2;
+            this.mainPanelMask.TabStop = false;
+            // 
+            // webBrowser
+            // 
+            this.webBrowser.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.webBrowser.Location = new System.Drawing.Point(0, 0);
+            this.webBrowser.Margin = new System.Windows.Forms.Padding(2);
+            this.webBrowser.MinimumSize = new System.Drawing.Size(15, 16);
+            this.webBrowser.Name = "webBrowser";
+            this.webBrowser.Size = new System.Drawing.Size(926, 570);
+            this.webBrowser.TabIndex = 0;
+            // 
+            // chromiumWebBrowser
+            // 
+            this.chromiumWebBrowser.ActivateBrowserOnCreation = false;
+// TODO: “”的代码生成失败，原因是出现异常“无效的基元类型: System.IntPtr。请考虑使用 CodeObjectCreateExpression。”。
+            this.chromiumWebBrowser.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.chromiumWebBrowser.Location = new System.Drawing.Point(0, 0);
+            this.chromiumWebBrowser.Name = "chromiumWebBrowser";
+            this.chromiumWebBrowser.Size = new System.Drawing.Size(926, 570);
+            this.chromiumWebBrowser.TabIndex = 1;
             // 
             // MainForm
             // 
@@ -1266,7 +1265,7 @@ namespace UI
             this.Controls.Add(this.mainEnhanceButton);
             this.Controls.Add(this.dualDetectButton);
             this.Controls.Add(this.mainDetectButton);
-            this.Controls.Add(this.DualCamButton);
+            this.Controls.Add(this.dualCamButton);
             this.Controls.Add(this.mainCamButton);
             this.Controls.Add(this.keepYawLabel);
             this.Controls.Add(this.keepDepthLabel);
@@ -1282,12 +1281,12 @@ namespace UI
             this.Controls.Add(this.panel4);
             this.Controls.Add(this.panel3);
             this.Controls.Add(this.panel2);
-            this.Controls.Add(this.panel1);
+            this.Controls.Add(this.mainPanel);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(2);
             this.Name = "MainForm";
-            this.Text = "  ";
-            this.Load += new System.EventHandler(this.Form1_Load);
-            this.panel1.ResumeLayout(false);
+            this.Text = "大连理工大学水下机器人控制台";
+            this.Load += new System.EventHandler(this.MainFormLoad);
             this.panel2.ResumeLayout(false);
             this.panel2.PerformLayout();
             this.panel3.ResumeLayout(false);
@@ -1309,21 +1308,17 @@ namespace UI
             this.panel15.PerformLayout();
             this.panel16.ResumeLayout(false);
             this.panel17.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.shoppingCartPic)).EndInit();
             this.panel18.ResumeLayout(false);
             this.panel19.ResumeLayout(false);
             this.panel12.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox6)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox5)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox4)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox3)).EndInit();
+            this.mainPanel.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.mainPanelMask)).EndInit();
             this.ResumeLayout(false);
 
         }
 
         #endregion
-
-        private System.Windows.Forms.Panel panel1;
         private System.Windows.Forms.Label serialStatLabel;
         private System.Windows.Forms.Label networkStatLabel;
         private System.Windows.Forms.Panel panel2;
@@ -1362,7 +1357,7 @@ namespace UI
         private System.Windows.Forms.Label keepDepthLabel;
         private System.Windows.Forms.Label keepYawLabel;
         private System.Windows.Forms.Button mainCamButton;
-        private System.Windows.Forms.Button DualCamButton;
+        private System.Windows.Forms.Button dualCamButton;
         private System.Windows.Forms.Button mainDetectButton;
         private System.Windows.Forms.Button dualDetectButton;
         private System.Windows.Forms.Button mainEnhanceButton;
@@ -1389,20 +1384,21 @@ namespace UI
         private System.Windows.Forms.Label mainCabPressLabel;
         private System.Windows.Forms.Label powerCabPressLabel;
         private System.Windows.Forms.Panel panel19;
-        private System.Windows.Forms.ListBox listBox1;
+        private System.Windows.Forms.ListBox infoListBox;
         private HZH_Controls.Controls.UCProcessLine xProcessLine;
         private HZH_Controls.Controls.UCProcessLine yProcessLine;
         private HZH_Controls.Controls.UCProcessLine zProcessLine;
-        private System.Windows.Forms.PictureBox pictureBox1;
+        private System.Windows.Forms.PictureBox shoppingCartPic;
         private HZH_Controls.Controls.UCSignalLamp ucSignalLamp1;
         private HZH_Controls.Controls.UCSignalLamp ucSignalLamp2;
-        private System.Windows.Forms.PictureBox pictureBox3;
-        private System.Windows.Forms.PictureBox pictureBox6;
-        private System.Windows.Forms.PictureBox pictureBox5;
-        private System.Windows.Forms.PictureBox pictureBox4;
-        private System.Windows.Forms.WebBrowser webBrowser1;
         private FlyMeter.HoriCt horiCt;
-        private System.Windows.Forms.Button haltButton;
+        private System.Windows.Forms.Button halfAutoModeButton;
+        private System.Windows.Forms.Panel mainPanel;
+        private System.Windows.Forms.WebBrowser webBrowser;
+        private CefSharp.WinForms.ChromiumWebBrowser chromiumWebBrowser;
+        private System.Windows.Forms.PictureBox mainPanelMask;
+        private FlyMeter.CompointCt compointCt;
+        private System.Windows.Forms.Label halfAutoLabel;
     }
 }
 

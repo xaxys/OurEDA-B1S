@@ -75,7 +75,7 @@ namespace UI
                 Console.WriteLine(ex);
                 return;
             }
-            if (!worker.IsBusy)
+            while (!worker.IsBusy)
             {
                 worker.RunWorkerAsync();
                 OnLog?.Invoke("启动串口监听");
@@ -84,7 +84,6 @@ namespace UI
 
         public void Disconnect()
         {
-            OnLog?.Invoke("断开串口");
             try
             {
                 if (serialPort.IsOpen)
@@ -122,7 +121,7 @@ namespace UI
                 try
                 {
                     var str = serialPort.ReadLine();
-                    OnReceived(str);
+                    OnReceived?.Invoke(str);
                 }
                 catch (Exception ex)
                 {

@@ -20,53 +20,69 @@ namespace UI
 {
     public partial class MainForm : Form
     {
-        string[] comm = new string[20];//控制仓
-        string[] comm2 = new string[20];//电源仓
-        string[] temcomm = new string[17];
-        Thread myThread;
-        public delegate void MyDelegateUI(); //定义委托类型
-        MyDelegateUI myDelegateUI; //声明委托对象
-        static Socket clientSocket;
-        static Socket serverSocket;
-        SerialManager serial;
-        ChromiumWebBrowser chromeBrowser;
-        ChromiumWebBrowser chromeBrowser2;
-        ChromiumWebBrowser chromeBrowser3;
-        ChromiumWebBrowser chromeBrowser4;
-        ChromiumWebBrowser chromeBrowser5;
-        ChromiumWebBrowser chromeBrowser6;
-
+        // 预定义常量
         static Color DisableColor = Color.FromArgb(67, 67, 67);
         static Color EnableColor = Color.FromArgb(0, 64, 0);
         static Color BusyColor = Color.FromArgb(255, 77, 59);
         static Color NormalColor = Color.FromArgb(0, 192, 0);
         static Color ErrorColor = Color.FromArgb(255, 0, 0);
+        static string MainCamURL = "http://192.168.0.123:5000/mono_cam_viewer_no_det";
+        static string MainDetectURL = "http://192.168.0.123:5000/mono_cam_viewer";
+        static string DualCamURL = "http://192.168.0.123:5000/stero_cam_viewer_no_det";
+        static string MainEnhanceURL = "http://192.168.0.123:5000/enhance";
+        static string DualDetectURL = "http://192.168.0.123:5000/stero_cam_viewer";
+        static string ViceCamURL = "http://192.168.0.8";
 
-        static TimeSpan SerialSendInterval = TimeSpan.FromMilliseconds(100);
+        static TimeSpan SerialSendInterval = TimeSpan.FromMilliseconds(50);
         static TimeSpan ControlPermDetectInterval = TimeSpan.FromMilliseconds(400);
+        static int HalfAutoSendInterval = 90;
 
-        Color serialColor = DisableColor;//串口状态
-        Color networkColor = DisableColor;//网口状态
+        enum BrowserVision
+        {
+            None, MainCam, MainDetect, DualCam, MainEnhance, DualDetect, ViceCam
+        }
 
-        Color mainCabColor = NormalColor;//控制舱是否漏水
-        Color powerCabColor = NormalColor;//电源舱是否漏水
+        enum ControlMode
+        {
+            None, Manual, Auto, HalfAuto 
+        }
+
+        public delegate void UpdateUIMethod();
+        UpdateUIMethod OnUpdateUI;
+        Thread updateUIThread;
+
+        SerialManager serial; // 串口连接
+        NetworkManager roboClient; // 下位机连接
+        NetworkManager autoClient; // 自主抓取上位机连接
+        NetworkManager halfAutoServer; // 半自主抓取上位机连接 对方要求是Server 呃呃
+        BackgroundWorker halfAutoSendWorker;
+
+        Color mainCabColor = NormalColor;  // 控制舱是否漏水
+        Color powerCabColor = NormalColor; // 电源舱是否漏水
+
         DateTime lastSerialTime;
-        int ks1 = -1, ks2 = -1;
-        int qjht = 0;//前进  后退
+        BrowserVision vision;
+        ControlMode ctrlMode;
 
-        int zy1 = 0;//左右
-        int sx1 = 0;//上下
-        int scd1 = 0;
-        string downstr = "";
+        // 历史遗留的神必变量，暂时没重构掉
+        int ks1 = -1, ks2 = -1;
+
+        // 神奇的解析完的传感器数据的储存的地方
+        string[] comm = new string[20];//控制仓
+        string[] comm2 = new string[20];//电源仓
+        // 神奇的解析完的串口数据（并没有解析）的储存的地方
+        string[] temcomm = new string[17];
+
+        // 用于自动半自动切换间保留的控制指令数据
+        byte[] serialCommand = new byte[30];
+        byte[] halfAutoCommand = new byte[30];
 
         public MainForm()
         {
             InitializeComponent();
-            CefSettings settings = new CefSettings();
-            Cef.Initialize(settings);
         }
 
-        private void Form1_Load(object sender, EventArgs e)
+        private void MainFormLoad(object sender, EventArgs e)
         {
 
             torectangle();
@@ -81,7 +97,7 @@ namespace UI
             comm[6] = "0";
             comm[7] = "0";
             comm[8] = "0";
-            comm[9] = "1";
+            comm[9] = "0";
             comm[10] = "0";
             comm[11] = "0";
             comm[12] = "0";
@@ -95,65 +111,154 @@ namespace UI
             comm2[0] = "0";
             comm2[1] = "0";
             comm2[2] = "0";
-            mainCabTempLabel.BringToFront();
-            myThread = new Thread(doWork);
-            myDelegateUI += updateInfo;//绑定委托
-            myThread.Start();
 
+            temcomm[1] = "1500";
+            temcomm[2] = "1500";
+            temcomm[3] = "1500";
+            temcomm[5] = "1500";
+            temcomm[6] = "1500";
+            mainCabTempLabel.BringToFront();
+            updateUIThread = new Thread(draw);
+            OnUpdateUI += updateInfo;
+            updateUIThread.Start();
+
+            // 上面代码不是我写的啊，太难维护了
+            // 下面是我写的
             serial = new SerialManager("COM3", 9600);
             serial.OnReceived += onSerialMessage;
-            serial.OnLog += (string info) => listBox1.Items.Add(info);
+            serial.OnLog += addInfo;
+
+            roboClient = new NetworkManager(new IPEndPoint(IPAddress.Parse("192.168.0.1"), 1234));
+            roboClient.BufferSize = 128;
+            roboClient.ReceiveSize = 47;
+            roboClient.CleanThreshold = 0.6;
+            roboClient.Detector += SensorDecoder.Detect;
+            roboClient.OnReceived += onSensorData;
+            roboClient.OnLog += addInfo;
+
+            autoClient = new NetworkManager(new IPEndPoint(IPAddress.Parse("192.168.0.123"), 6000));
+            autoClient.BufferSize = 128;
+            autoClient.ReceiveSize = 30;
+            autoClient.CleanThreshold = 0.7;
+            autoClient.Detector += OperationDecoder.Detect;
+            autoClient.OnReceived += onOperationData;
+            autoClient.OnLog += addInfo;
+
+            halfAutoServer = new NetworkManager(new IPEndPoint(IPAddress.Any, 4567));
+            halfAutoServer.ListenBackLog = 0;
+            autoClient.BufferSize = 128;
+            autoClient.ReceiveSize = 30;
+            autoClient.CleanThreshold = 0.7;
+            halfAutoServer.Detector += OperationDecoder.Detect;
+            halfAutoServer.OnReceived += onHalfAutoOperationData;
+            halfAutoServer.OnLog += addInfo;
+            halfAutoServer.Listen();
+
+            halfAutoSendWorker = new BackgroundWorker();
+            halfAutoSendWorker.WorkerSupportsCancellation = true;
+            halfAutoSendWorker.DoWork += (object a, DoWorkEventArgs b) =>
+            {
+                BackgroundWorker worker = a as BackgroundWorker;
+                while (!worker.CancellationPending && ctrlMode == ControlMode.HalfAuto)
+                {
+                    Thread.Sleep(HalfAutoSendInterval);
+                    bool hasSerialCommand = false;
+                    for (var i = 0; i < serialCommand.Length; i++)
+                    {
+                        hasSerialCommand |= serialCommand[i] != 0;
+                    }
+                    if (!hasSerialCommand)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("半自动模式：串口历史数据为空，拒绝下发数据");
+                        Console.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                        continue;
+                    }
+
+                    bool hasHalfAutoCommand = false;
+                    for (var i = 0; i < halfAutoCommand.Length; i++)
+                    {
+                        hasHalfAutoCommand |= halfAutoCommand[i] != 0;
+                    }
+                    if (!hasHalfAutoCommand)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("半自动模式：半自动脚本历史数据为空，拒绝下发数据");
+                        Console.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                        continue;
+                    }
+
+                    var combinedData = new byte[30];
+                    if (ctrlMode == ControlMode.HalfAuto)
+                    {
+                        for (var i = 0; i < 9; i++)
+                        {
+                            combinedData[i] = serialCommand[i];
+                        }
+                        combinedData[9] = halfAutoCommand[9];
+                        combinedData[10] = halfAutoCommand[10];
+                        combinedData[11] = serialCommand[11];
+                        combinedData[12] = serialCommand[12];
+                        for (var i = 13; i < 27; i++)
+                        {
+                            combinedData[i] = halfAutoCommand[i];
+                        }
+                        for (var i = 27; i < 30; i++)
+                        {
+                            combinedData[i] = serialCommand[i];
+                        }
+                    }
+                    roboClient.Send(combinedData);
+                    Console.WriteLine();
+                    Console.WriteLine("半自动模式下发数据");
+                    Console.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                    Console.WriteLine(BitConverter.ToString(combinedData, 0).Replace("-", string.Empty));
+                }
+            };
+            halfAutoSendWorker.RunWorkerCompleted += (object a, RunWorkerCompletedEventArgs ev) =>
+            {
+                if (ev.Cancelled)
+                {
+                    addInfo("半自主模式定时发送正常退出");
+                }
+                else
+                {
+                    addInfo("半自主模式定时发送终止");
+                }
+            };
+        }
+
+        private void addInfo(string info)
+        {
+            Invoke(new Action(() =>
+            {
+                infoListBox.Items.Add(info);
+                infoListBox.TopIndex = infoListBox.Items.Count - (infoListBox.Height / infoListBox.ItemHeight);
+            }));
         }
 
         void torectangle()
         {
             GraphicsPath gp1 = new GraphicsPath();
-            GraphicsPath gp3 = new GraphicsPath();
-            GraphicsPath gp4 = new GraphicsPath();
-            GraphicsPath gp5 = new GraphicsPath();
-            GraphicsPath gp6 = new GraphicsPath();
-            gp1.AddEllipse(pictureBox1.ClientRectangle);
-            gp3.AddEllipse(pictureBox3.ClientRectangle);
-            gp4.AddEllipse(pictureBox4.ClientRectangle);
-            gp5.AddEllipse(pictureBox5.ClientRectangle);
-            gp6.AddEllipse(pictureBox6.ClientRectangle);
+            gp1.AddEllipse(shoppingCartPic.ClientRectangle);
             Region region1 = new Region(gp1);
-            Region region3 = new Region(gp3);
-            Region region4 = new Region(gp3);
-            Region region5 = new Region(gp3);
-            Region region6 = new Region(gp3);
-            pictureBox1.Region = region1;
-            pictureBox3.Region = region3;
-            pictureBox4.Region = region4;
-            pictureBox5.Region = region5;
-            pictureBox6.Region = region6;
+            shoppingCartPic.Region = region1;
 
             gp1.Dispose();
             region1.Dispose();
-            gp3.Dispose();
-            region3.Dispose();
-
-            gp4.Dispose();
-            region4.Dispose();
-            gp5.Dispose();
-            region5.Dispose();
-            gp6.Dispose();
-            region6.Dispose();
         }
 
         // 一言难尽，实在是改不动了
         private void updateInfo() //信息处理函数定义
         {
-            serialStatLabel.BackColor = serialColor;
-            networkStatLabel.BackColor = networkColor;
             mainCabTempLabel.Text = "温度:" + Math.Round(Convert.ToDouble(comm[0]), 1) + "℃";//仓内温度
             powerCabTempLabel.Text = "温度:" + Math.Round(Convert.ToDouble(comm2[0]), 1) + "℃";
 
             mainCabPressLabel.Text = "气压:" + Math.Round(Convert.ToDouble(comm[1]), 1) + "KPa";
             powerCabPressLabel.Text = "气压:" + Math.Round(Convert.ToDouble(comm2[1]), 1) + "KPa";
 
-            mainCabHumidLabel.Text = "湿度:" + comm[2] + "%";//湿度
-            powerCabHumidLabel.Text = "湿度:" + comm2[2].ToString() + "%";
+            mainCabHumidLabel.Text = "湿度:" + comm[2] + "%"; //湿度
+            powerCabHumidLabel.Text = "湿度:" + comm2[2]+ "%";
 
             waterTempLabel.Text = "水温:" + Math.Round(Convert.ToDouble(comm[11]), 1) + "℃";//水温
             depthLabel.Text = "深度:" + Math.Round(Convert.ToDouble(comm[12]), 2) + "M"; //水深
@@ -162,33 +267,30 @@ namespace UI
             rollLabel.Text = string.Format("横滚角{0}°", comm[3]);
             pitchLabel.Text = string.Format("俯仰角{0}°", comm[4]);
             yawLabel.Text = string.Format("航向角{0}°", comm[5]);
+
             horiCt.Hori_Disp(Convert.ToDouble(comm[4]), -Convert.ToDouble(comm[3]));
+            compointCt.Compass_Disp(Convert.ToDouble(comm[5]));
 
             mainCabErrorLabel.BackColor = mainCabColor;
             powerCabErrorLabel.BackColor = powerCabColor;
             controlPermLabel.BackColor = DateTime.Now.Subtract(lastSerialTime) > ControlPermDetectInterval ? DisableColor : EnableColor;
             //label32.BackColor = sd1;
 
+            var qjht = (Convert.ToInt32(temcomm[1]) - 1500) / 10;
+            var zy1 = (Convert.ToInt32(temcomm[2]) - 1500) / 10;
+            var sx1 = (Convert.ToInt32(temcomm[3]) - 1500) / 10;
+
             xLabel.Text = qjht.ToString();
             yLabel.Text = zy1.ToString();
             zLabel.Text = sx1.ToString();
-            if (qjht >= 0)
-                xProcessLine.Value = qjht;
-            else
-                xProcessLine.Value = -qjht;
-            if (zy1 >= 0)
-                yProcessLine.Value = zy1;
-            else
-                yProcessLine.Value = -zy1;
-            if (sx1 >= 0)
-                zProcessLine.Value = sx1;
-            else
-                zProcessLine.Value = -sx1;
 
-
+            xProcessLine.Value = Math.Abs(qjht);
+            yProcessLine.Value = Math.Abs(zy1);
+            zProcessLine.Value = Math.Abs(sx1);
 
             //侧推1 定向2 定深4 机械臂8
             //25 23        22  27
+            var scd1 = (Convert.ToInt32(temcomm[6]) - 1500) / 10;
             if (scd1 > 0) { ucConveyor1.ConveyorDirection = HZH_Controls.Controls.ConveyorDirection.Forward; rightArrow1.BackColor = EnableColor; }
             if (scd1 < 0) { ucConveyor1.ConveyorDirection = HZH_Controls.Controls.ConveyorDirection.Backward; leftArrow.BackColor = EnableColor; }
             if (scd1 == 0) { ucConveyor1.ConveyorDirection = HZH_Controls.Controls.ConveyorDirection.None; rightArrow1.BackColor = BusyColor; leftArrow.BackColor = BusyColor; }
@@ -261,8 +363,7 @@ namespace UI
             else
                 modeDownLabel.BackColor = DisableColor;
 
-            angleLabel.Text = "云台:" + (Convert.ToInt32(temcomm[10]) - 500) / 10;
-
+            angleLabel.Text = "云台:" + (int)((Convert.ToInt32(temcomm[5]) - 500) / 2000.0 * 180.0);
 
             if (Convert.ToInt32(temcomm[6]) > 1520)
             {
@@ -292,18 +393,20 @@ namespace UI
                 brightnessLabel.BackColor = EnableColor;
             else
                 brightnessLabel.BackColor = DisableColor;
+
+            manualLabel.BackColor = ctrlMode == ControlMode.Manual ? EnableColor : DisableColor;
+            autoLabel.BackColor = ctrlMode == ControlMode.Auto ? EnableColor : DisableColor;
+            halfAutoLabel.BackColor = ctrlMode == ControlMode.HalfAuto ? EnableColor : DisableColor;
         }
 
-
-
-        private void doWork()
+        private void draw()
         {
             while (true)
             {
                 try
                 {
                     Thread.Sleep(100);
-                    Invoke(myDelegateUI);
+                    Invoke(OnUpdateUI);
                     Application.DoEvents();
                 }
                 catch (Exception ex) {
@@ -313,224 +416,159 @@ namespace UI
             }
         }
 
-        private void networkPanel_Click(object sender, EventArgs e)
+        private void networkStatClick(object sender, EventArgs e)
         {
-            var IP = "192.168.0.1";
-            int port = 1234;
-
-            IPAddress ip = IPAddress.Parse(IP);  //将IP地址字符串转换成IPAddress实例   
-            clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);//使用指定的地址簇协议、套接字类型和通信协议
-            IPEndPoint endPoint = new IPEndPoint(ip, port); // 用指定的ip和端口号初始化IPEndPoint实例
-            listBox1.Items.Add("网络连接中...");
-            try
+            if (!roboClient.IsOpen)
             {
-                clientSocket.Connect(endPoint);  //与远程主机建立连接
-                Console.WriteLine("网络连接成功");
-                listBox1.Items.Add("网络连接成功");
-                networkColor = EnableColor;
-                Thread th = new Thread(ReceiveMsg);
-                th.IsBackground = true;
-                th.Start();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                MessageBox.Show("网口连接失败");
-                listBox1.Items.Add("网络连接失败");
-            }
-
-        }
-        void ReceiveMsg()
-        {
-            var receive = new byte[1024];
-            var index = 0;
-            while (true)
-            {
-                try
+                roboClient.Connect();
+                if (roboClient.IsOpen)
                 {
-                    int length = clientSocket.Receive(receive, index, 47, 0);
-                    if (length == 0) continue;
-                    index += length;
-
-                    if (index > receive.Length * 0.8)
-                    {
-                        index = 0;
-                        for (var i = 0; i < receive.Length; i++)
-                        {
-                            receive[i] = 0;
-                        }
-                        continue;
-                    }
-
-                    /*Console.WriteLine();
-                    Console.WriteLine(DateTime.Now);
-                    Console.WriteLine(BitConverter.ToString(receive, 0, index).Replace("-", " "));*/
-
-                    var (sensor, start, end) = SensorDecoder.Decode(receive);
-                    for (; sensor != null; (sensor, start, end) = SensorDecoder.Decode(receive))
-                    {
-
-                        for (var i = end; i < receive.Length; i++)
-                        {
-                            receive[i - end] = receive[i];
-                        }
-                        for (var i = receive.Length - end; i < receive.Length; i++)
-                        {
-                            receive[i] = 0;
-                        }
-                        index -= end;
-
-                        /*Console.WriteLine(sensor.ToString());*/
-
-                        if (sensor.Cab == SensorDecoder.SensorData.CabType.ControlCab && sensor.Leak)
-                        {
-                            ks1 = 1;
-                            mainCabColor = ErrorColor;
-                        }
-                        if (sensor.Cab == SensorDecoder.SensorData.CabType.PowerCab && sensor.Leak)
-                        {
-                            ks2 = 1;
-                            powerCabColor = ErrorColor;
-                        }
-
-                        // 开始魔法
-
-                        if (sensor.Cab == SensorDecoder.SensorData.CabType.ControlCab)
-                        {
-                            if (sensor.Temperature <= 60.0 && sensor.Temperature > 1.1)
-                            {
-                                comm[0] = sensor.Temperature.ToString();
-                            }
-
-                            if (sensor.Pressure < 1000 && sensor.Pressure > 10)
-                            {
-                                comm[1] = sensor.Pressure.ToString();
-                            }
-                            if (sensor.Humidity > 1.1)
-                            {
-                                comm[2] = sensor.Humidity.ToString();
-                            }
-
-                            if (sensor.Roll < 60.0)
-                            {
-                                comm[3] = "-" + ((int)sensor.Roll).ToString();
-                            }
-                            if (sensor.Roll > 300.0)
-                            {
-                                comm[3] = ((int)(360 - sensor.Roll)).ToString();
-                            }
-
-                            if (sensor.Pitch < 50)
-                            {
-                                comm[4] = ((int)sensor.Pitch).ToString();
-                            }
-
-                            if (sensor.Pitch > 310)
-                            {
-                                comm[4] = ((int)sensor.Pitch - 360).ToString();
-                            }
-
-                            double yaw = 0;
-                            if (sensor.Yaw > 0)
-                            {
-                                yaw = 360 - sensor.Yaw;
-                            }
-                            if (sensor.Yaw <= 0)
-                            {
-                                yaw = -sensor.Yaw;
-                            }
-                            if (sensor.Yaw == 360)
-                            {
-                                yaw = 0;
-                            }
-
-                            yaw = (yaw + 360 - 90) % 360;
-                            comm[5] = ((int)yaw).ToString();
-
-                            // int hx1 = sensor.Yaw;
-                            // int hx2 = hx1 - 180;
-                            // if (hx2 > 0) hx2 = System.Math.Abs(hx2 - 180);
-                            // else hx2 = System.Math.Abs(hx2) + 180;
-
-                            // if (hx2 < 190) hx2 = hx2 + 170;
-                            // else hx2 = hx2 + 170 - 360;
-
-                            // comm[5] = hx1.ToString();
-
-                            if (sensor.WaterTemp > 1.01 && sensor.WaterTemp < 99.9)
-                            {
-                                comm[11] = sensor.WaterTemp.ToString();
-                            }
-
-                            comm[12] = sensor.WaterDepth.ToString();
-                            if (sensor.Height <= 30 && sensor.Height > 0)
-                            {
-                                comm[9] = sensor.Height.ToString(); //声呐depth
-                            }
-                            comm[10] = sensor.SonarAccurancy.ToString(); //声呐确信度
-
-                            comm[6] = sensor.Hx.ToString();
-                            comm[7] = sensor.Hy.ToString();
-                            comm[8] = sensor.Hz.ToString();
-
-                            comm[13] = sensor.Ax.ToString();
-                            comm[14] = sensor.Ay.ToString();
-                            comm[15] = sensor.Az.ToString();
-                            comm[16] = sensor.Wx.ToString();
-                            comm[17] = sensor.Wy.ToString();
-                            comm[18] = sensor.Wz.ToString();
-                        }
-
-                        if (sensor.Cab == SensorDecoder.SensorData.CabType.PowerCab)
-                        {
-                            if (sensor.Temperature <= 60.0 && sensor.Temperature > 1.1)
-                            {
-                                comm2[0] = sensor.Temperature.ToString();
-                            }
-
-                            if (sensor.Pressure < 1000 && sensor.Pressure > 10)
-                            {
-                                comm2[1] = sensor.Pressure.ToString();
-                            }
-                            if (sensor.Humidity > 1.1)
-                            {
-                                comm2[2] = sensor.Humidity.ToString();
-                            }
-                        }
-
-                    }
+                    networkStatLabel.BackColor = EnableColor;
                 }
-                catch (Exception ex)
+                else
                 {
-                    Console.WriteLine(ex);
-                    clientSocket.Close();
-                    break;
+                    MessageBox.Show("连接网络失败");
+                }
+            }
+            else
+            {
+                roboClient.Disconnect();
+                if (!roboClient.IsOpen)
+                {
+                    networkStatLabel.BackColor = DisableColor;
+                }
+                else
+                {
+                    MessageBox.Show("断开网络失败");
                 }
             }
         }
 
+        void onSensorData(byte[] data)
+        {
+            var (sensor, start, end) = SensorDecoder.Decode(data);
+            if (sensor != null)
+            {
+                if (sensor.Cab == SensorDecoder.SensorData.CabType.ControlCab && sensor.Leak)
+                {
+                    ks1 = 1;
+                    mainCabColor = ErrorColor;
+                }
+                if (sensor.Cab == SensorDecoder.SensorData.CabType.PowerCab && sensor.Leak)
+                {
+                    ks2 = 1;
+                    powerCabColor = ErrorColor;
+                }
 
-        /*        private void pictureBox3_Click(object sender, EventArgs e)
-                { 
+                // 开始魔法
 
-                    try
-                    { sp2.PortName = "COM8";
-                    sp2.BaudRate = 9600;
-                        sp2.Open();
+                if (sensor.Cab == SensorDecoder.SensorData.CabType.ControlCab)
+                {
+                    if (sensor.Temperature <= 60.0 && sensor.Temperature > 1.1)
+                    {
+                        comm[0] = sensor.Temperature.ToString();
                     }
-                    catch(Exception ex) { MessageBox.Show(ex.ToString()); Console.WriteLine(ex); }
-                }*/
 
+                    if (sensor.Pressure < 1000 && sensor.Pressure > 10)
+                    {
+                        comm[1] = sensor.Pressure.ToString();
+                    }
+                    if (sensor.Humidity > 1.1)
+                    {
+                        comm[2] = sensor.Humidity.ToString();
+                    }
 
-        private void serialPanel_Click(object sender, EventArgs e)
+                    if (sensor.Roll < 60.0)
+                    {
+                        comm[3] = "-" + ((int)sensor.Roll).ToString();
+                    }
+                    if (sensor.Roll > 300.0)
+                    {
+                        comm[3] = ((int)(360 - sensor.Roll)).ToString();
+                    }
+
+                    if (sensor.Pitch < 50)
+                    {
+                        comm[4] = ((int)sensor.Pitch).ToString();
+                    }
+
+                    if (sensor.Pitch > 310)
+                    {
+                        comm[4] = ((int)sensor.Pitch - 360).ToString();
+                    }
+
+                    double yaw = 0;
+                    if (sensor.Yaw > 0)
+                    {
+                        yaw = 360 - sensor.Yaw;
+                    }
+                    if (sensor.Yaw <= 0)
+                    {
+                        yaw = -sensor.Yaw;
+                    }
+                    if (sensor.Yaw == 360)
+                    {
+                        yaw = 0;
+                    }
+
+                    yaw = (yaw + 360 - 90) % 360;
+                    comm[5] = ((int)yaw).ToString();
+
+                    if (sensor.WaterTemp > 1.01 && sensor.WaterTemp < 99.9)
+                    {
+                        comm[11] = sensor.WaterTemp.ToString();
+                    }
+
+                    comm[12] = sensor.WaterDepth.ToString();
+                    if (sensor.Height <= 30 && sensor.Height > 0)
+                    {
+                        comm[9] = sensor.Height.ToString(); //声呐depth
+                    }
+                    comm[10] = sensor.SonarAccurancy.ToString(); //声呐确信度
+
+                    comm[6] = sensor.Hx.ToString();
+                    comm[7] = sensor.Hy.ToString();
+                    comm[8] = sensor.Hz.ToString();
+
+                    comm[13] = sensor.Ax.ToString();
+                    comm[14] = sensor.Ay.ToString();
+                    comm[15] = sensor.Az.ToString();
+                    comm[16] = sensor.Wx.ToString();
+                    comm[17] = sensor.Wy.ToString();
+                    comm[18] = sensor.Wz.ToString();
+                }
+
+                if (sensor.Cab == SensorDecoder.SensorData.CabType.PowerCab)
+                {
+                    if (sensor.Temperature <= 60.0 && sensor.Temperature > 1.1)
+                    {
+                        comm2[0] = sensor.Temperature.ToString();
+                    }
+
+                    if (sensor.Pressure < 1000 && sensor.Pressure > 10)
+                    {
+                        comm2[1] = sensor.Pressure.ToString();
+                    }
+                    if (sensor.Humidity > 1.1)
+                    {
+                        comm2[2] = sensor.Humidity.ToString();
+                    }
+                }
+            }
+        }
+
+        private void serialStatClick(object sender, EventArgs e)
         {
             if (!serial.IsOpen)
             {
                 serial.Connect();
                 if (serial.IsOpen)
                 {
-                    manualLabel.BackColor = EnableColor;
-                    serialColor = EnableColor;
+                    serialStatLabel.BackColor = EnableColor;
+                    if (ctrlMode == ControlMode.None)
+                    {
+                        ctrlMode = ControlMode.Manual;
+                    }
                 }
                 else
                 {
@@ -542,8 +580,11 @@ namespace UI
                 serial.Disconnect();
                 if (!serial.IsOpen)
                 {
-                    manualLabel.BackColor = DisableColor;
-                    serialColor = DisableColor;
+                    serialStatLabel.BackColor = DisableColor;
+                    if (ctrlMode == ControlMode.Manual)
+                    {
+                        ctrlMode = ControlMode.None;
+                    }
                 }
                 else
                 {
@@ -560,14 +601,15 @@ namespace UI
 
                 var time = DateTime.Now;
                 if (time.Subtract(lastSerialTime) < SerialSendInterval) return;
+
+                var comm = str.Split(':');
+                if (comm.Length != 17) return;
+
+                temcomm = comm;
                 lastSerialTime = time;
 
-                downstr = str;
-                var comm = str.Split(':');
-                temcomm = comm;
-
                 var sb = new StringBuilder();
-                sb.Append(25);
+                sb.Append("25");
                 for (int i = 1; i < comm.Length - 1; i++)
                 {
                     if (i < 14)
@@ -591,16 +633,32 @@ namespace UI
                     buft[j1] = Convert.ToByte(s.Substring(j2, 2), 16);
                     j2 = j2 + 2;
                 }
-                qjht = (Convert.ToInt32(temcomm[1]) - 1500) / 10; // 前进后退
-                zy1 = (Convert.ToInt32(temcomm[2]) - 1500) / 10; // 左右
-                sx1 = (Convert.ToInt32(temcomm[3]) - 1500) / 10;
-                scd1 = (Convert.ToInt32(temcomm[6]) - 1500) / 10; // 传送带
-                clientSocket.Send(buft);
 
-                Console.WriteLine();
-                Console.WriteLine(DateTime.Now);
-                Console.WriteLine(str);
-                Console.WriteLine(s);
+                if (ctrlMode == ControlMode.Manual)
+                {
+                    roboClient.Send(buft);
+                    Console.WriteLine();
+                    Console.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                    Console.WriteLine(str);
+                    Console.WriteLine(s);
+                    halfAutoCommand = serialCommand;
+                }
+                serialCommand = buft;
+
+                if (sw != null)
+                {
+                    try
+                    {
+                        sw.WriteLine();
+                        sw.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                        sw.Write(str);
+                        sw.WriteLine(s);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e);
+                    }
+                }
 
                 if (ks1 == 0 && ks2 == 0) serial.Send("0");
                 if (ks1 == 1 || ks2 == 1) serial.Send("1");
@@ -611,143 +669,318 @@ namespace UI
             }
         }
 
-        int fla = 0;//主摄像头
-        int fla2 = 0;
-        int fla3 = 0;
-        int fla4 = 0;//多摄像头
-        int fla5 = 0;
-        int fla6 = 0;
-        private void mainCamButtonClick(object sender, EventArgs e)//主摄像头
+        private void disableCurrentControlMode()
         {
-           
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; } 
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-            if (fla6 == 1) { chromeBrowser6.Stop(); fla6 = 0; }
-
-            if (fla == 0)
+            switch (ctrlMode)
             {
-                string page = "http://192.168.0.123:5000/mono_cam_viewer_no_det";
-             //   string page = "http://www.baidu.com";
-                chromeBrowser = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser);
-                fla = 1;
-                chromeBrowser.Dock = DockStyle.Fill;
-                chromeBrowser.BringToFront();
-               // Cef.EnableHighDPISupport();
-              
-               // chromeBrowser.Site=
-                //chromeBrowser.
-              // chromeBrowser.SetZoomLevel(1.25);
+                case ControlMode.Auto:
+                    {
+                        autoClient.Disconnect();
+                        if (!autoClient.IsOpen)
+                        {
+                            modeAutoButton.BackColor = DisableColor;
+                            ctrlMode = serial.IsOpen ? ControlMode.Manual : ControlMode.None;
+                        }
+                        else
+                        {
+                            MessageBox.Show("断开自主抓取服务失败");
+                        }
+                        break;
+                    }
+                case ControlMode.HalfAuto:
+                    {
+                        halfAutoModeButton.BackColor = DisableColor;
+                        halfAutoSendWorker.CancelAsync();
+                        ctrlMode = serial.IsOpen ? ControlMode.Manual : ControlMode.None;
+                        break;                   
+                    }
+                default:
+                    break;
             }
-            webBrowser1.Visible = false;
+        }
+
+        private void halfAutoModeButtonClick(object sender, EventArgs e)
+        {
+            halfAutoCommand = serialCommand;
+            if (ctrlMode != ControlMode.HalfAuto)
+            {
+                if (halfAutoServer.IsWorking)
+                {
+                    ctrlMode = ControlMode.HalfAuto;
+                    halfAutoSendWorker.RunWorkerAsync();
+                    modeAutoButton.BackColor = DisableColor;
+                    halfAutoModeButton.BackColor = EnableColor;
+                    addInfo("切换半自动模式");
+                }
+                else
+                {
+                    MessageBox.Show("半自动模式启动失败");
+                }
+            }
+            else
+            {
+                halfAutoModeButton.BackColor = DisableColor;
+                ctrlMode = serial.IsOpen ? ControlMode.Manual : ControlMode.None;
+                halfAutoSendWorker.CancelAsync();
+                addInfo("切换手动模式");
+            }
+        }
+
+        private void onHalfAutoOperationData(byte[] data)
+        {
+            halfAutoCommand = data;
+        }
+
+        // unused
+        private void haltButtonClick(object sender, EventArgs e)
+        {
+            var halt = new NetworkManager(new IPEndPoint(IPAddress.Parse("192.168.0.8"), 12345));
+            halt.OnLog += addInfo;
+            halt.Connect();
+            if (!halt.IsOpen)
+            {
+                MessageBox.Show("连接关机服务失败");
+                return;
+            }
+            var StopCommand = Encoding.UTF8.GetBytes("stop");
+            halt.Send(StopCommand);
+            halt.Disconnect();
+            if (halt.IsOpen)
+            {
+                MessageBox.Show("关闭关机服务失败");
+                return;
+            }
+        }
+        
+        private void modeAutoButtonClick(object sender, EventArgs e)
+        {
+            if (ctrlMode != ControlMode.Auto)
+            {
+                autoClient.Connect();
+                if (autoClient.IsOpen)
+                {
+                    string asd1 = "2505DC05DC05DC05DC05DC05DC0000000000000000000000000000000021";
+                    byte[] buft = new byte[30];
+                    for (int j1 = 0, j2 = 0; j2 <= asd1.Length - 2; j1++)
+                    {
+                        buft[j1] = Convert.ToByte(asd1.Substring(j2, 2), 16);
+                        j2 = j2 + 2;
+                    }
+                    for (int zxcaq = 0; zxcaq < 10; zxcaq++)
+                    {
+                        autoClient.Send(buft);
+                    }
+
+                    halfAutoModeButton.BackColor = DisableColor;
+                    modeAutoButton.BackColor = EnableColor;
+                    if (ctrlMode == ControlMode.HalfAuto)
+                    {
+                        halfAutoSendWorker.CancelAsync();
+                    }
+                    ctrlMode = ControlMode.Auto;
+                    addInfo("切换自动模式");
+                }
+                else
+                {
+                    MessageBox.Show("连接自主抓取服务失败");
+                }
+            }
+            else
+            {
+                autoClient.Disconnect();
+                if (!autoClient.IsOpen)
+                {
+                    modeAutoButton.BackColor = DisableColor;
+                    ctrlMode = serial.IsOpen ? ControlMode.Manual : ControlMode.None;
+                    addInfo("切换手动模式");
+                }
+                else
+                {
+                    MessageBox.Show("断开自主抓取服务失败");
+                }
+            }
+        }
+
+        void onOperationData(byte[] data)
+        {
+            if (ctrlMode == ControlMode.Auto)
+            {
+                Console.WriteLine();
+                Console.WriteLine("全自动模式下发数据");
+                Console.WriteLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss:ffff"));
+                Console.WriteLine(BitConverter.ToString(data, 0).Replace("-", string.Empty));
+                roboClient.Send(data);
+            }
+        }
+
+
+        private void disableCamUI()
+        {
+            switch (vision)
+            {
+                case BrowserVision.MainCam:
+                    mainCamButton.BackColor = DisableColor;
+                    break;
+                case BrowserVision.MainDetect:
+                    mainDetectButton.BackColor = DisableColor;
+                    break;
+                case BrowserVision.DualCam:
+                    dualCamButton.BackColor = DisableColor;
+                    break;
+                case BrowserVision.MainEnhance:
+                    mainEnhanceButton.BackColor = DisableColor;
+                    break;
+                case BrowserVision.DualDetect:
+                    dualDetectButton.BackColor = DisableColor;
+                    break;
+                case BrowserVision.ViceCam:
+                    viceCamButton.BackColor = DisableColor;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private void mainCamButtonClick(object sender, EventArgs e) // 主摄像头
+        {
+            if (vision == BrowserVision.ViceCam)
+            {
+                webBrowser.Stop();
+            }
+            disableCamUI();
+
+            if (vision != BrowserVision.MainCam)
+            {
+                chromiumWebBrowser.Load(MainCamURL);
+                chromiumWebBrowser.BringToFront();
+                vision = BrowserVision.MainCam;
+                mainCamButton.BackColor = EnableColor;
+            }
+            else
+            {
+                chromiumWebBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                mainCamButton.BackColor = DisableColor;
+            }
         }
 
         private void mainDetectButtonClick(object sender, EventArgs e)
         {
-            if (fla == 1) { chromeBrowser.Stop(); fla = 0; }
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-            if (fla6 == 1) { chromeBrowser6.Stop(); fla6 = 0; }
-
-            if (fla3 == 0)
+            if (vision == BrowserVision.ViceCam)
             {
-                string page = "http://192.168.0.123:5000/mono_cam_viewer";
-                chromeBrowser3 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser3);
-                fla3 = 1;
-                chromeBrowser3.Dock = DockStyle.Fill;
-                chromeBrowser3.BringToFront();
+                webBrowser.Stop();
             }
-            webBrowser1.Visible = false;
+            disableCamUI();
+
+            if (vision != BrowserVision.MainDetect)
+            {
+                chromiumWebBrowser.Load(MainDetectURL);
+                chromiumWebBrowser.BringToFront();
+                vision = BrowserVision.MainDetect;
+                mainDetectButton.BackColor = EnableColor;
+            }
+            else
+            {
+                chromiumWebBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                mainDetectButton.BackColor = DisableColor;
+            }
         }
 
-        private void DualCamButtonClick(object sender, EventArgs e)//双目
+        private void DualCamButtonClick(object sender, EventArgs e) // 双目
         {
-            if (fla == 1) { chromeBrowser.Stop(); fla = 0; }
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-            if (fla6 == 1) { chromeBrowser6.Stop(); fla6 = 0; }
-
-            if (fla2 == 0)
+            if (vision == BrowserVision.ViceCam)
             {
-                string page = "http://192.168.0.123:5000/stero_cam_viewer_no_det";
-                chromeBrowser2 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser2);
-                fla2 = 1;
-                chromeBrowser2.Dock = DockStyle.Fill;
-                chromeBrowser2.BringToFront();
+                webBrowser.Stop();
             }
-            webBrowser1.Visible = false;
-           
+            disableCamUI();
+
+            if (vision != BrowserVision.DualCam)
+            {
+                chromiumWebBrowser.Load(DualCamURL);
+                chromiumWebBrowser.BringToFront();
+                vision = BrowserVision.DualCam;
+                dualCamButton.BackColor = EnableColor;
+            }
+            else
+            {
+                chromiumWebBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                dualCamButton.BackColor = DisableColor;
+            }
         }
 
         private void mainEnhanceButtonClick(object sender, EventArgs e)//图像增强
         {
-            if (fla == 1) { chromeBrowser.Stop(); fla = 0; }
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; }
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla6 == 1) { chromeBrowser6.Stop(); fla6 = 0; }
-
-            if (fla5 == 0)
+            if (vision == BrowserVision.ViceCam)
             {
-                string page = "http://192.168.0.123:5000/enhance";
-                chromeBrowser5 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser5);
-                fla5 = 1;
-                chromeBrowser5.Dock = DockStyle.Fill;
-                chromeBrowser5.BringToFront();
+                webBrowser.Stop();
             }
-            webBrowser1.Visible = false;
+            disableCamUI();
+
+            if (vision != BrowserVision.MainEnhance)
+            {
+                chromiumWebBrowser.Load(MainEnhanceURL);
+                chromiumWebBrowser.BringToFront();
+                vision = BrowserVision.MainEnhance;
+                mainEnhanceButton.BackColor = EnableColor;
+            }
+            else
+            {
+                chromiumWebBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                mainEnhanceButton.BackColor = DisableColor;
+            }
+        }
+
+        private void dualDetectButtonClick(object sender, EventArgs e) // 双目检测
+        {
+            if (vision == BrowserVision.ViceCam)
+            {
+                webBrowser.Stop();
+            }
+            disableCamUI();
+
+            if (vision != BrowserVision.DualDetect)
+            {
+                chromiumWebBrowser.Load(DualDetectURL);
+                chromiumWebBrowser.BringToFront();
+                vision = BrowserVision.DualDetect;
+                dualDetectButton.BackColor = EnableColor;
+            }
+            else
+            {
+                chromiumWebBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                dualDetectButton.BackColor = DisableColor;
+            }
         }
 
         private void viceCamButtonClick(object sender, EventArgs e)
         {
-            if (fla == 1) { chromeBrowser.Stop(); fla = 0; }
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; }
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-
-            if (fla6 == 0)
+            disableCamUI();
+            if (vision != BrowserVision.ViceCam)
             {
-                string page = "http://192.168.0.8";
-                chromeBrowser6 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser6);
-                fla6 = 1;
-                chromeBrowser6.Dock = DockStyle.Fill;
-                chromeBrowser6.SendToBack();
-                webBrowser1.Visible = true;
-                webBrowser1.Navigate("http://192.168.0.8");
-                webBrowser1.ScriptErrorsSuppressed = true;
-                webBrowser1.BringToFront();
+                webBrowser.Navigate(ViceCamURL);
+                webBrowser.ScriptErrorsSuppressed = true;
+                webBrowser.BringToFront();
+                vision = BrowserVision.ViceCam;
+                viceCamButton.BackColor = EnableColor;
             }
-
-            /*if (fla == 1) { chromeBrowser.Stop(); fla = 0; }
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; }
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla4 == 1) { chromeBrowser4.Stop(); fla4 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-
-            if (fla6 == 0)
+            else
             {
-                string page = "http://192.168.0.8";
-                chromeBrowser6 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser6);
-                fla6 = 1;
-                chromeBrowser6.Dock = DockStyle.Fill;
-                chromeBrowser6.BringToFront();
+                webBrowser.Stop();
+                mainPanelMask.BringToFront();
+                vision = BrowserVision.None;
+                viceCamButton.BackColor = DisableColor;
             }
-           */
-
-            webBrowser1.Visible = true;
-
         }
-  
+
         private void panel19_Paint(object sender, PaintEventArgs e)
         {
             ControlPaint.DrawBorder(e.Graphics,
@@ -1022,117 +1255,6 @@ namespace UI
                               ButtonBorderStyle.Solid);
         }
 
-        int zzms = 0;
-        private void modeAutoButtonClick(object sender, EventArgs e)
-        {
-            if (zzms == 0)//开启自主抓取
-            { 
-                var IP = "192.168.0.123";
-                int port = 6000;
-                IPAddress ip = IPAddress.Parse(IP);  //将IP地址字符串转换成IPAddress实例   
-                serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);//使用指定的地址簇协议、套接字类型和通信协议
-                IPEndPoint endPoint = new IPEndPoint(ip, port); // 用指定的ip和端口号初始化IPEndPoint实例
-                modeAutoButton.BackColor = EnableColor;
-                manualLabel.BackColor = DisableColor;
-                autoLabel.BackColor = EnableColor;
-                zzms = 1;
-                try
-                {
-                    serverSocket.Connect(endPoint);  //与远程主机建立连接
-                    Console.WriteLine("服务连接成功");
-                    listBox1.Items.Add("服务连接成功");
-                    
-                    Thread th = new Thread(ReceiveMsg2);
-                    th.IsBackground = true;
-                    th.Start();
-                    string asd1 = "2505DC05DC05DC05DC05DC05DC0000000000000000000000000000000021";
-                    byte[] buft = new byte[30];
-                    for (int j1 = 0, j2 = 0; j2 <= asd1.Length - 2; j1++)
-                    {
-                        buft[j1] = Convert.ToByte(asd1.Substring(j2, 2), 16);
-                        j2 = j2 + 2;
-                    }
-                    for(int zxcaq=0;zxcaq<10;zxcaq++)
-                        serverSocket.Send(buft);
-
-
-                    /*for (int j1 = 0; ; j1++)
-                    {
-                        buft = Convert.ToByte(command.Substring(84, 4), 16);
-                    
-                    }*/
-                 
-
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(string.Format("自主抓取机网络连接失败{0}", ex));  
-                    listBox1.Items.Add("自主抓取机网络连接失败");
-                }
-            }
-            else//关闭自主抓取
-            {
-               /* try 
-                {
-                  
-      
-                    listenThread.Start();
-                    
-                }
-                catch(Exception ex) { MessageBox.Show(ex.ToString());}*/
-                listBox1.Items.Add("关闭自主抓取");
-                manualLabel.BackColor = EnableColor;
-                autoLabel.BackColor = DisableColor;
-                modeAutoButton.BackColor = DisableColor;
-                zzms = 0;
-                try 
-                {
-                    serverSocket.Close(); 
-                }
-                catch(Exception ex) { MessageBox.Show(ex.ToString()); }
-                
-            }
-        
-        }
-        void ReceiveMsg2()
-        {
-            byte[] receive2 = new byte[8 * 1024];
-            string buffer2;
-            string tem_ttt;
-            while (true)
-            {
-                try
-                {
-                    int length = serverSocket.Receive(receive2);
-                    if (length == 0)
-                        continue;
-                    buffer2 = BitConverter.ToString(receive2).Replace("-", "");
-                    if (buffer2.IndexOf("25", 1) == -1)
-                        continue;
-                    tem_ttt = buffer2.Substring(buffer2.IndexOf("25", 1), 60);
-                    if (tem_ttt[58] != '2' || tem_ttt[59] != '1' )
-                        continue;
-                  
-                    byte[] buft = new byte[30];
-                    for (int j1 = 0, j2 = 0; j2 <= tem_ttt.Length - 2; j1++)
-                    {
-                        buft[j1] = Convert.ToByte(tem_ttt.Substring(j2, 2), 16);
-                        j2 = j2 + 2;
-                    }
-
-                    clientSocket.Send(buft);
-               
-                  /* byte[] buft2= Encoding.UTF8.GetBytes(command.Substring(84, 4));
-                    serverSocket.Send(buft2);*/
-                }
-                catch(Exception ex) {
-                    Console.WriteLine(ex);
-                    serverSocket.Close();
-                    break;
-                }
-            }
-        }
-
         // 以下一堆paint不知道写来干嘛用，不敢动
        private void label22_Paint(object sender, PaintEventArgs e)
         {
@@ -1351,6 +1473,25 @@ namespace UI
                                1,
                                ButtonBorderStyle.Solid);
         }
+        private void halfAutoLabel_Paint(object sender, PaintEventArgs e)
+        {
+            ControlPaint.DrawBorder(e.Graphics,
+                               this.halfAutoLabel.ClientRectangle,
+                               Color.Silver,//7f9db9
+                               1,
+                               ButtonBorderStyle.Solid,
+                               Color.Silver,
+                               1,
+                               ButtonBorderStyle.Solid,
+                               Color.Silver,
+                               1,
+                               ButtonBorderStyle.Solid,
+                               Color.Silver,
+                               1,
+                               ButtonBorderStyle.Solid);
+
+        }
+
 
         // deprecated
         string curdateTime = "";
@@ -1368,7 +1509,7 @@ namespace UI
             {
                 g.CopyFromScreen(0, 0, 0, 0, new Size(ScreenArea.Width, ScreenArea.Height));
                 curdateTime = DateTime.Now.ToString("yyyy_MM_dd_HH_mm_ss");
-                bmp.Save("D:\\picture" + "\\" + curdateTime + ".jpg");//直接存储在c盘会出错
+                bmp.Save(@"D:\picture" + @"\" + curdateTime + ".jpg");//直接存储在c盘会出错
             }
             return;
         }
@@ -1376,48 +1517,46 @@ namespace UI
         // deprecated
         public void GetCommand()
         {
-            string tem_com1 = downstr;
-            string result = tem_com1.Trim(); //输入文本
-            StreamWriter sw = File.AppendText(@"D:\\picture\\"+ curdateTime+".txt"); //保存到指定路径
-            sw.Write(result);
+            // string tem_com1 = downstr;
+            // string result = tem_com1.Trim(); //输入文本
+            StreamWriter sw = File.AppendText(@"D:\picture\"+ curdateTime+".txt"); //保存到指定路径
+            // sw.Write(result);
             sw.Flush();
             sw.Close();
         }
-       
+
+        StreamWriter sw;
+        private void recordCommand(object sender, EventArgs e)
+        {
+            if (sw != null)
+            {
+                MessageBox.Show("已在记录中");
+                return;
+            }
+            var curDateTime = DateTime.Now;
+            sw = File.AppendText(@"C:\Users\ROV\Documents\SerialRecord\" + curDateTime.ToString("yyyy-MM-dd HH-mm-ss-ffff") + ".txt");
+            addInfo(string.Format("开始记录:{0}", curDateTime.ToString("HH:mm:ss:ffff")));
+        }
+
+        private void recordCommandStop(object sender, EventArgs e)
+        {
+            if (sw == null)
+            {
+                MessageBox.Show("请先开始记录");
+                return;
+            }
+            sw.Flush();
+            sw.Close();
+            sw = null;
+            addInfo("结束记录");
+        }
 
         // deprecated
         private void pictureBox4_Click(object sender, EventArgs e)//保存截图和命令
         {
             GetScreen();
-            listBox1.Items.Add("截图成功");
+            infoListBox.Items.Add("截图成功");
             GetCommand();
         }
-
-        private void haltButton_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void dualDetectButtonClick(object sender, EventArgs e)//双目检测
-        {
-            if (fla == 1) { chromeBrowser.Stop();fla = 0; }
-            if (fla2 == 1) { chromeBrowser2.Stop(); fla2 = 0; }
-            if (fla3 == 1) { chromeBrowser3.Stop(); fla3 = 0; }
-            if (fla5 == 1) { chromeBrowser5.Stop(); fla5 = 0; }
-            if (fla6 == 1) { chromeBrowser6.Stop(); fla6 = 0; }
-
-            if (fla4 == 0)
-            {
-                //string page = "http://192.168.0.123:5000";
-                string page = "http://192.168.0.123:5000/stero_cam_viewer";
-                chromeBrowser4 = new ChromiumWebBrowser(page);
-                panel1.Controls.Add(chromeBrowser4);
-                fla4 = 1;
-                chromeBrowser4.Dock = DockStyle.Fill;
-                chromeBrowser4.BringToFront();
-            }
-            webBrowser1.Visible = false;
-        }
-
     }
 }
